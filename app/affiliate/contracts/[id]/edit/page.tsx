@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { notFound, redirect } from "next/navigation"
-import { ContractTermsEditor } from "@/components/contract/contract-terms-editor"
+import { ContractTermsEditor } from "@/components/contracts/contract-terms-editor"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
