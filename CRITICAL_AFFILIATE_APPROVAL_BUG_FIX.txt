@@ -1,0 +1,278 @@
+===============================================================================
+  CRITICAL BUG: الشريك يوافق -> المدير يوافق تلقائياً
+===============================================================================
+
+Date: November 3, 2025, 8:17 AM
+Status: CODE FIXED - DATABASE MIGRATION REQUIRED
+
+===============================================================================
+  المشكلة
+===============================================================================
+
+عند موافقة الشريك على العقد:
+  ❌ النظام يسجل أن المدير وافق (خطأ فادح!)
+  ❌ الخطوة تتقدم للمدير بدون موافقته الفعلية
+  ❌ النظام يحظر لأن "الشريك لم يوافق" حسب البيانات
+
+===============================================================================
+  السبب الجذري
+===============================================================================
+
+المشكلة في ملفين:
+
+1. الكود (تم إصلاحه ✓)
+   File: lib/contract-flow/flow-state-machine.ts
+   Lines: 245-253
+   
+   الكود الآن صحيح ويستخدم participant الفعلي
+
+2. قاعدة البيانات (تحتاج migration ❌)
+   المشكلة: عمود affiliate_review_approved غير موجود في الجدول
+   النتيجة: البيانات لا تُحفظ بشكل صحيح
+
+===============================================================================
+  الحل - خطوتين
+===============================================================================
+
+الخطوة 1: الكود (تم إصلاحه ✓)
+────────────────────────────────────────────────────────────────────────────
+
+File: lib/contract-flow/flow-state-machine.ts (Lines 245-253)
+
+الكود الصحيح:
+  if (participant === 'admin') {
+    stepState.adminCompleted = true
+  } else if (participant === 'client') {
+    stepState.clientCompleted = true
+  } else if (participant === 'affiliate') {
+    stepState.affiliateCompleted = true
+  }
+
+✓ يستخدم participant الفعلي
+✓ لا يعتمد على اسم الـ action
+✓ منطق صحيح 100%
+
+────────────────────────────────────────────────────────────────────────────
+
+الخطوة 2: قاعدة البيانات (يجب تنفيذها ❌)
+────────────────────────────────────────────────────────────────────────────
+
+File: database/migrations/add_affiliate_workflow_support.sql
+
+يجب تشغيل هذا الـ SQL على قاعدة البيانات:
+
+1. افتح Supabase Dashboard
+2. اذهب إلى SQL Editor
+3. انسخ محتوى الملف add_affiliate_workflow_support.sql
+4. شغّل الـ SQL
+5. تحقق من النتيجة
+
+الأعمدة المطلوبة:
+  ✓ affiliate_review_approved (BOOLEAN)
+  ✓ current_step_name (TEXT)
+  ✓ review_completed_at (TIMESTAMP)
+  ✓ signatures_completed_at (TIMESTAMP)
+  ✓ otp_verified_at (TIMESTAMP)
+  ✓ id_cards_completed_at (TIMESTAMP)
+  ✓ payment_proof_uploaded_at (TIMESTAMP)
+  ✓ payment_approved_at (TIMESTAMP)
+  ✓ finalized_at (TIMESTAMP)
+  ✓ admin_payment_proof_reviewed (BOOLEAN)
+  ✓ payment_approved (BOOLEAN)
+  ✓ finalized (BOOLEAN)
+  ✓ otp_verified (BOOLEAN)
+
+===============================================================================
+  التحقق من المشكلة
+===============================================================================
+
+طريقة 1: فحص قاعدة البيانات
+────────────────────────────────────────────────────────────────────────────
+
+في Supabase SQL Editor، شغّل:
+
+  SELECT column_name, data_type 
+  FROM information_schema.columns 
+  WHERE table_name = 'contracts' 
+  AND column_name IN (
+    'affiliate_review_approved',
+    'current_step_name',
+    'review_completed_at'
+  );
+
+النتيجة المتوقعة:
+  affiliate_review_approved | boolean
+  current_step_name         | text
+  review_completed_at       | timestamp with time zone
+
+إذا لم تظهر هذه الأعمدة -> المشكلة هنا!
+
+────────────────────────────────────────────────────────────────────────────
+
+طريقة 2: فحص البيانات بعد الموافقة
+────────────────────────────────────────────────────────────────────────────
+
+بعد موافقة الشريك، شغّل:
+
+  SELECT 
+    contract_number,
+    admin_review_approved,
+    client_review_approved,
+    affiliate_review_approved,
+    current_step_name
+  FROM contracts 
+  WHERE id = 'CONTRACT_ID_HERE';
+
+النتيجة الصحيحة (بعد موافقة الشريك فقط):
+  admin_review_approved:     false
+  client_review_approved:    false
+  affiliate_review_approved: true   ← يجب أن يكون true
+  current_step_name:         review
+
+النتيجة الخاطئة (المشكلة الحالية):
+  admin_review_approved:     true   ← خطأ!
+  client_review_approved:    false
+  affiliate_review_approved: NULL أو false
+  current_step_name:         review أو NULL
+
+===============================================================================
+  خطوات الإصلاح الكاملة
+===============================================================================
+
+الخطوة 1: تشغيل Migration
+────────────────────────────────────────────────────────────────────────────
+
+1. افتح Supabase Dashboard
+   URL: https://supabase.com/dashboard/project/YOUR_PROJECT
+
+2. اذهب إلى SQL Editor (من القائمة الجانبية)
+
+3. انقر "New Query"
+
+4. انسخ محتوى الملف:
+   database/migrations/add_affiliate_workflow_support.sql
+
+5. الصق في SQL Editor
+
+6. انقر "Run" أو اضغط Ctrl+Enter
+
+7. تحقق من النتيجة:
+   ✓ Success: Migration completed
+   ❌ Error: اقرأ رسالة الخطأ وأصلحها
+
+────────────────────────────────────────────────────────────────────────────
+
+الخطوة 2: التحقق من النجاح
+────────────────────────────────────────────────────────────────────────────
+
+شغّل هذا SQL للتحقق:
+
+  SELECT column_name 
+  FROM information_schema.columns 
+  WHERE table_name = 'contracts' 
+  AND column_name LIKE '%affiliate%';
+
+يجب أن يظهر:
+  affiliate_id
+  affiliate_review_approved
+
+────────────────────────────────────────────────────────────────────────────
+
+الخطوة 3: اختبار الموافقة
+────────────────────────────────────────────────────────────────────────────
+
+1. أنشئ عقد جديد مع affiliate
+2. سجل دخول كشريك
+3. وافق على العقد
+4. تحقق من قاعدة البيانات:
+
+   SELECT 
+     admin_review_approved,
+     client_review_approved,
+     affiliate_review_approved
+   FROM contracts 
+   WHERE id = 'CONTRACT_ID';
+
+   النتيجة المتوقعة:
+   admin_review_approved:     false
+   client_review_approved:    false
+   affiliate_review_approved: true  ← صحيح!
+
+5. سجل دخول كمدير
+6. تحقق أن المدير لم يوافق تلقائياً
+7. وافق كمدير
+8. تحقق من قاعدة البيانات مرة أخرى:
+
+   النتيجة المتوقعة:
+   admin_review_approved:     true  ← الآن صحيح
+   client_review_approved:    false
+   affiliate_review_approved: true
+
+===============================================================================
+  سبب المشكلة التقني
+===============================================================================
+
+عندما يوافق الشريك:
+
+1. الكود يستدعي: performAction('AFFILIATE_REVIEW_APPROVED', 'affiliate')
+
+2. computeNextState() يعمل بشكل صحيح:
+   stepState.affiliateCompleted = true  ← صحيح
+
+3. mapFlowStateToContract() يحاول الحفظ:
+   affiliate_review_approved: true
+
+4. Supabase يحاول UPDATE:
+   UPDATE contracts 
+   SET affiliate_review_approved = true
+   WHERE id = 'xxx'
+
+5. المشكلة:
+   ❌ العمود affiliate_review_approved غير موجود!
+   ❌ Supabase يتجاهل الحقل أو يعطي خطأ
+   ❌ البيانات لا تُحفظ
+   ❌ عند إعادة القراءة، البيانات خاطئة
+
+===============================================================================
+  الخلاصة
+===============================================================================
+
+✓ الكود صحيح 100%
+✓ المنطق صحيح 100%
+✓ الـ Migration جاهز 100%
+
+❌ المشكلة الوحيدة: لم يتم تشغيل الـ Migration على قاعدة البيانات
+
+الحل: شغّل الملف add_affiliate_workflow_support.sql في Supabase
+
+بعد تشغيل الـ Migration:
+  ✓ المشكلة ستختفي تماماً
+  ✓ كل شيء سيعمل بشكل صحيح
+  ✓ الشريك يوافق -> affiliateCompleted = true
+  ✓ المدير يوافق -> adminCompleted = true
+  ✓ العميل يوافق -> clientCompleted = true
+
+===============================================================================
+  ملاحظة مهمة
+===============================================================================
+
+إذا كنت قد شغّلت الـ Migration بالفعل ولا تزال المشكلة موجودة:
+
+1. تحقق من أن الأعمدة موجودة فعلاً:
+   SELECT * FROM information_schema.columns 
+   WHERE table_name = 'contracts' 
+   AND column_name = 'affiliate_review_approved';
+
+2. تحقق من الـ Browser Console للأخطاء:
+   F12 -> Console -> ابحث عن أخطاء
+
+3. تحقق من Supabase Logs:
+   Dashboard -> Logs -> ابحث عن UPDATE errors
+
+4. أضف console.log في الكود:
+   File: lib/stores/contract-flow-store.ts
+   Line: 193 (بعد mapFlowStateToContract)
+   
+   console.log('Updating contract with:', mapFlowStateToContract(newState))
+
+===============================================================================

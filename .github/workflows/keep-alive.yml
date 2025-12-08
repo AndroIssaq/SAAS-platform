@@ -1,0 +1,32 @@
+name: Supabase Keep-Alive
+
+# يعمل كل 12 ساعة لضمان بقاء Supabase نشط
+on:
+  schedule:
+    # كل 12 ساعة (الساعة 2 صباحاً و 2 مساءً UTC)
+    - cron: '0 2,14 * * *'
+  
+  # يمكن تشغيله يدوياً من GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Ping Supabase Keep-Alive Endpoint
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://your-domain.vercel.app/api/cron/keep-alive)
+          
+          if [ $response -eq 200 ]; then
+            echo "✅ Keep-alive ping successful (HTTP $response)"
+          else
+            echo "❌ Keep-alive ping failed (HTTP $response)"
+            exit 1
+          fi
+      
+      - name: Log Success
+        if: success()
+        run: echo "Supabase keep-alive completed at $(date)"

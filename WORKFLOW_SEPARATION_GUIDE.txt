@@ -1,0 +1,261 @@
+===============================================================================
+  دليل فصل الـ Workflows - 2-Party vs 3-Party
+===============================================================================
+
+Date: November 3, 2025, 8:31 AM
+Status: SEPARATED & ORGANIZED
+
+===============================================================================
+  البنية الجديدة
+===============================================================================
+
+الآن لدينا 3 ملفات منفصلة تماماً:
+
+1. flow-state-machine.ts (الحالي - يحتوي على كلا الـ workflows)
+   - يدعم 2-party و 3-party معاً
+   - يستخدم hasAffiliate flag للتمييز
+   - هذا الملف سيبقى كما هو للتوافق مع الكود الحالي
+
+2. flow-state-machine-original.ts (جديد - 2-party فقط)
+   - الـ workflow الأصلي النظيف
+   - Admin + Client فقط
+   - لا يحتوي على أي كود affiliate
+   - يمكن استخدامه للعقود البسيطة
+
+3. affiliate-flow-state-machine.ts (جديد - 3-party فقط)
+   - Workflow خاص بالعقود مع الشركاء
+   - Admin + Client + Affiliate
+   - كل الخطوات تدعم الشريك
+   - منفصل تماماً عن الـ 2-party
+
+===============================================================================
+  متى تستخدم أي ملف؟
+===============================================================================
+
+استخدم flow-state-machine-original.ts عندما:
+────────────────────────────────────────────────────────────────────────────
+✓ العقد بين المدير والعميل فقط
+✓ لا يوجد affiliate_id
+✓ تريد workflow بسيط ونظيف
+✓ لا تحتاج أي منطق affiliate
+
+مثال:
+  import { 
+    initialFlowState, 
+    computeNextState 
+  } from '@/lib/contract-flow/flow-state-machine-original'
+
+────────────────────────────────────────────────────────────────────────────
+
+استخدم affiliate-flow-state-machine.ts عندما:
+────────────────────────────────────────────────────────────────────────────
+✓ العقد يحتوي على affiliate_id
+✓ تحتاج موافقة الشريك في خطوة Review
+✓ الشريك يتابع باقي الخطوات
+✓ تريد workflow كامل للـ 3 أطراف
+
+مثال:
+  import { 
+    createAffiliateFlowState, 
+    computeAffiliateNextState 
+  } from '@/lib/contract-flow/affiliate-flow-state-machine'
+
+  const flowState = createAffiliateFlowState(affiliateId)
+
+────────────────────────────────────────────────────────────────────────────
+
+استخدم flow-state-machine.ts (الحالي) عندما:
+────────────────────────────────────────────────────────────────────────────
+✓ تريد دعم كلا السيناريوهين في نفس الكود
+✓ تريد التوافق مع الكود الحالي
+✓ تريد dynamic switching بناءً على hasAffiliate
+
+مثال:
+  import { 
+    createInitialFlowState, 
+    computeNextState 
+  } from '@/lib/contract-flow/flow-state-machine'
+
+  const flowState = createInitialFlowState(hasAffiliate, affiliateId)
+
+===============================================================================
+  الفروقات الرئيسية
+===============================================================================
+
+flow-state-machine-original.ts (2-Party):
+────────────────────────────────────────────────────────────────────────────
+ParticipantRole: 'admin' | 'client'
+StepState: {
+  adminCompleted: boolean
+  clientCompleted: boolean
+  // NO affiliateCompleted
+}
+FlowState: {
+  // NO hasAffiliate
+  // NO affiliateId
+}
+Actions: NO 'AFFILIATE_REVIEW_APPROVED'
+
+────────────────────────────────────────────────────────────────────────────
+
+affiliate-flow-state-machine.ts (3-Party):
+────────────────────────────────────────────────────────────────────────────
+ParticipantRole: 'admin' | 'client' | 'affiliate'
+StepState: {
+  adminCompleted: boolean
+  clientCompleted: boolean
+  affiliateCompleted: boolean  ← NEW
+  requiresAffiliate?: boolean  ← NEW
+}
+FlowState: {
+  hasAffiliate: true           ← Always true
+  affiliateId: string          ← Required
+}
+Actions: INCLUDES 'AFFILIATE_REVIEW_APPROVED'
+
+────────────────────────────────────────────────────────────────────────────
+
+flow-state-machine.ts (Both):
+────────────────────────────────────────────────────────────────────────────
+ParticipantRole: 'admin' | 'client' | 'affiliate'
+StepState: {
+  adminCompleted: boolean
+  clientCompleted: boolean
+  affiliateCompleted: boolean
+  requiresAffiliate?: boolean
+}
+FlowState: {
+  hasAffiliate: boolean        ← Dynamic
+  affiliateId?: string | null  ← Optional
+}
+Actions: INCLUDES all actions
+Logic: Uses hasAffiliate flag to determine behavior
+
+===============================================================================
+  منطق الموافقة في كل ملف
+===============================================================================
+
+flow-state-machine-original.ts:
+────────────────────────────────────────────────────────────────────────────
+Review Step:
+  ✓ Admin must approve
+  ✓ Client must approve
+  ✓ NO affiliate approval needed
+  
+  isStepComplete = adminCompleted && clientCompleted
+
+────────────────────────────────────────────────────────────────────────────
+
+affiliate-flow-state-machine.ts:
+────────────────────────────────────────────────────────────────────────────
+Review Step:
+  ✓ Admin must approve
+  ✓ Client must approve
+  ✓ Affiliate MUST approve  ← CRITICAL
+  
+  if (stepState.requiresAffiliate) {
+    isStepComplete = adminCompleted && 
+                     clientCompleted && 
+                     affiliateCompleted
+  }
+
+────────────────────────────────────────────────────────────────────────────
+
+flow-state-machine.ts:
+────────────────────────────────────────────────────────────────────────────
+Review Step:
+  Dynamic based on hasAffiliate flag
+  
+  if (stepState.requiresAffiliate && hasAffiliate) {
+    // 3-party: all three must approve
+    isStepComplete = adminCompleted && 
+                     clientCompleted && 
+                     affiliateCompleted
+  } else {
+    // 2-party: only admin and client
+    isStepComplete = adminCompleted && clientCompleted
+  }
+
+===============================================================================
+  كيفية التحديث للكود الحالي
+===============================================================================
+
+الخيار 1: استمر باستخدام flow-state-machine.ts (الحالي)
+────────────────────────────────────────────────────────────────────────────
+✓ لا تغيير مطلوب
+✓ الكود الحالي يعمل كما هو
+✓ يدعم كلا السيناريوهين
+
+الكود الحالي:
+  const flowState = createInitialFlowState(hasAffiliate, affiliateId)
+
+────────────────────────────────────────────────────────────────────────────
+
+الخيار 2: استخدم الملفات المنفصلة
+────────────────────────────────────────────────────────────────────────────
+للعقود بدون affiliate:
+  import * as TwoPartyFlow from '@/lib/contract-flow/flow-state-machine-original'
+  const flowState = TwoPartyFlow.initialFlowState
+
+للعقود مع affiliate:
+  import * as ThreePartyFlow from '@/lib/contract-flow/affiliate-flow-state-machine'
+  const flowState = ThreePartyFlow.createAffiliateFlowState(affiliateId)
+
+────────────────────────────────────────────────────────────────────────────
+
+الخيار 3: Dynamic import بناءً على affiliate_id
+────────────────────────────────────────────────────────────────────────────
+if (contract.affiliate_id) {
+  // Use 3-party workflow
+  import * as Flow from '@/lib/contract-flow/affiliate-flow-state-machine'
+  const flowState = Flow.createAffiliateFlowState(contract.affiliate_id)
+} else {
+  // Use 2-party workflow
+  import * as Flow from '@/lib/contract-flow/flow-state-machine-original'
+  const flowState = Flow.initialFlowState
+}
+
+===============================================================================
+  التوصية
+===============================================================================
+
+للمرحلة الحالية:
+────────────────────────────────────────────────────────────────────────────
+✓ استمر باستخدام flow-state-machine.ts (الحالي)
+✓ الملفات الجديدة موجودة كـ reference
+✓ يمكن التحويل لاحقاً عند الحاجة
+
+السبب:
+  - الكود الحالي يعمل
+  - لا داعي لتغيير كل الـ imports
+  - الملفات الجديدة جاهزة للاستخدام المستقبلي
+
+للمستقبل:
+────────────────────────────────────────────────────────────────────────────
+عند إضافة features جديدة:
+  - استخدم الملفات المنفصلة
+  - أسهل في الصيانة
+  - أوضح في المنطق
+  - لا confusion بين الـ workflows
+
+===============================================================================
+  ملخص الملفات
+===============================================================================
+
+الملف                              | الاستخدام              | الحالة
+────────────────────────────────────────────────────────────────────────────
+flow-state-machine.ts              | Both workflows         | Active (حالي)
+flow-state-machine-original.ts     | 2-party only          | New (مرجع)
+affiliate-flow-state-machine.ts    | 3-party only          | New (مرجع)
+
+===============================================================================
+  الخلاصة
+===============================================================================
+
+✓ الـ workflow الأصلي (2-party) محفوظ في flow-state-machine-original.ts
+✓ الـ workflow الجديد (3-party) موجود في affiliate-flow-state-machine.ts
+✓ الملف الحالي flow-state-machine.ts يدعم كلاهما
+✓ لا تغيير مطلوب على الكود الحالي
+✓ الملفات الجديدة جاهزة للاستخدام المستقبلي
+
+===============================================================================
