@@ -114,14 +114,48 @@ export async function deleteContractDirectly(contractId: string, reason: string)
       return { success: false, error: deleteError.message }
     }
 
-    return { 
-      success: true, 
-      message: 'تم حذف العقد بنجاح' 
+    return {
+      success: true,
+      message: 'تم حذف العقد بنجاح'
     }
   } catch (error: any) {
-    return { 
-      success: false, 
-      error: error.message || 'حدث خطأ أثناء حذف العقد' 
+    return {
+      success: false,
+      error: error.message || 'حدث خطأ أثناء حذف العقد'
     }
   }
+}
+
+export async function getDeletionRequests() {
+  const supabase = await createClient()
+  // Admin only check implicit via RLS or explicit role check usually
+
+  const { data, error } = await supabase
+    .from('contract_deletion_requests')
+    .select('*, contracts(contract_number, client_id)')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching deletion requests:', error)
+    return []
+  }
+
+  return data
+}
+
+export async function reviewDeletionRequest(requestId: string, status: 'approved' | 'rejected') {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('contract_deletion_requests')
+    .update({ status })
+    .eq('id', requestId)
+    .select()
+    .single()
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, data }
 }

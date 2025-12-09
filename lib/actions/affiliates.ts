@@ -96,3 +96,20 @@ export async function getAllPayouts() {
 
   return { success: true, data }
 }
+
+export async function handlePayoutConfirmation(payoutId: string) {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('payouts')
+    .update({ status: 'paid', paid_at: new Date().toISOString() })
+    .eq('id', payoutId)
+    .select()
+    .single()
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, data }
+}
