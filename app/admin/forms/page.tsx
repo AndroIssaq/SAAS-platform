@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import { FormCard } from "@/components/admin/forms/form-card"
 import { getAllForms } from "@/lib/actions/forms"
 
+export const dynamic = 'force-dynamic'
+
 export default async function FormsPage() {
     const { forms, error } = await getAllForms()
 
