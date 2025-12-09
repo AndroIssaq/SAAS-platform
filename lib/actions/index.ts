@@ -13,7 +13,7 @@ export * from './onboarding'
 export * from './projects'
 export * from './portfolio'
 export * from './contract-deletion'
-export * from './deletion-requests'
+
 export * from './email-logs'
 export * from './contracts'
 export * from './project-updates'
