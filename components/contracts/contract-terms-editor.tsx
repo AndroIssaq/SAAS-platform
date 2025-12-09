@@ -4,16 +4,14 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm, useFieldArray } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { Loader2, Plus, Trash2, Save } from "lucide-react"
-import { format } from "date-fns"
+import { Loader2, Plus, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
     Form,
     FormControl,
-    FormDescription,
     FormField,
     FormItem,
     FormLabel,
@@ -22,9 +20,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
 
 const contractTermsSchema = z.object({
     service_type: z.string().min(2, "نوع الخدمة مطلوب"),
@@ -44,16 +40,28 @@ const contractTermsSchema = z.object({
 
 type ContractTermsValues = z.infer<typeof contractTermsSchema>
 
+interface InitialTerms {
+    service_type?: string
+    package_name?: string
+    service_description?: string
+    total_amount?: number
+    deposit_amount?: number
+    timeline?: string
+    payment_method?: string
+    deliverables?: string[]
+    payment_schedule?: string[]
+    custom_terms?: { title: string; content: string }[]
+}
+
 interface ContractTermsEditorProps {
     contractId: string
-    initialTerms: any
-    userRole: "admin" | "affiliate"
+    initialTerms: InitialTerms
+    userRole?: "admin" | "affiliate"
 }
 
 export function ContractTermsEditor({
     contractId,
     initialTerms,
-    userRole,
 }: ContractTermsEditorProps) {
     const router = useRouter()
     const { toast } = useToast()
@@ -61,7 +69,7 @@ export function ContractTermsEditor({
     const supabase = createClient()
 
     const form = useForm<ContractTermsValues>({
-        resolver: zodResolver(contractTermsSchema),
+        resolver: zodResolver(contractTermsSchema) as any,
         defaultValues: {
             service_type: initialTerms.service_type || "",
             package_name: initialTerms.package_name || "",
@@ -76,18 +84,8 @@ export function ContractTermsEditor({
         },
     })
 
-    const { fields: deliverableFields, append: appendDeliverable, remove: removeDeliverable } = useFieldArray({
-        control: form.control,
-        name: "deliverables" as any,
-    })
-
-    // Helper because simple array of strings with useFieldArray is tricky in some hook form versions without object wrapper
-    // But here we'll manage strictly if the schema matches. usage below maps correctly.
-
-    const { fields: paymentFields, append: appendPayment, remove: removePayment } = useFieldArray({
-        control: form.control,
-        name: "payment_schedule" as any,
-    })
+    // Note: We use form.watch() and form.setValue() directly for string arrays
+    // instead of useFieldArray, as useFieldArray works best with object arrays
 
 
     async function onSubmit(data: ContractTermsValues) {
@@ -151,7 +149,7 @@ export function ContractTermsEditor({
                     </CardHeader>
                     <CardContent className="grid gap-6 md:grid-cols-2">
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="service_type"
                             render={({ field }) => (
                                 <FormItem>
@@ -164,7 +162,7 @@ export function ContractTermsEditor({
                             )}
                         />
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="package_name"
                             render={({ field }) => (
                                 <FormItem>
@@ -178,7 +176,7 @@ export function ContractTermsEditor({
                         />
                         <div className="col-span-2">
                             <FormField
-                                control={form.control}
+                                control={form.control as any}
                                 name="service_description"
                                 render={({ field }) => (
                                     <FormItem>
@@ -202,7 +200,7 @@ export function ContractTermsEditor({
                     </CardHeader>
                     <CardContent className="grid gap-6 md:grid-cols-3">
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="total_amount"
                             render={({ field }) => (
                                 <FormItem>
@@ -215,7 +213,7 @@ export function ContractTermsEditor({
                             )}
                         />
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="deposit_amount"
                             render={({ field }) => (
                                 <FormItem>
@@ -228,7 +226,7 @@ export function ContractTermsEditor({
                             )}
                         />
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="payment_method"
                             render={({ field }) => (
                                 <FormItem>
@@ -250,7 +248,7 @@ export function ContractTermsEditor({
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <FormField
-                            control={form.control}
+                            control={form.control as any}
                             name="timeline"
                             render={({ field }) => (
                                 <FormItem>
@@ -265,10 +263,10 @@ export function ContractTermsEditor({
 
                         <div className="space-y-4">
                             <FormLabel>مخرجات العمل (Deliverables)</FormLabel>
-                            {form.watch("deliverables").map((_, index) => (
+                            {form.watch("deliverables").map((_: string, index: number) => (
                                 <div key={index} className="flex gap-2">
                                     <FormField
-                                        control={form.control}
+                                        control={form.control as any}
                                         name={`deliverables.${index}`}
                                         render={({ field }) => (
                                             <FormItem className="flex-1">
@@ -286,7 +284,7 @@ export function ContractTermsEditor({
                                             size="icon"
                                             onClick={() => {
                                                 const current = form.getValues("deliverables")
-                                                form.setValue("deliverables", current.filter((_, i) => i !== index))
+                                                form.setValue("deliverables", current.filter((_val: string, i: number) => i !== index))
                                             }}
                                         >
                                             <Trash2 className="h-4 w-4 text-destructive" />

@@ -10,7 +10,7 @@
     "test:cron": "node scripts/test-cron.js"
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.10.0",
+    "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-aspect-ratio": "1.1.1",
@@ -61,7 +61,7 @@
     "react-confetti": "^6.4.0",
     "react-day-picker": "9.8.0",
     "react-dom": "^19.0.0",
-    "react-hook-form": "^7.60.0",
+    "react-hook-form": "^7.68.0",
     "react-signature-canvas": "^1.0.7",
     "react-use": "^17.6.0",
     "recharts": "^2.15.4",
@@ -72,7 +72,7 @@
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1",
     "vaul": "^1.1.2",
-    "zod": "3.25.76",
+    "zod": "4.1.13",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
